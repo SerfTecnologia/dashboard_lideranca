@@ -134,7 +134,7 @@
   .grid-top { display: grid; grid-template-columns: clamp(250px, 19vw, 340px) 1fr; gap: clamp(10px, 1.1vw, 15px); flex: 1 1 auto; min-height: 0; }
   @media (max-width: 860px) { .grid-top { grid-template-columns: 1fr; } }
 
-  .hero-col { display: flex; flex-direction: column; gap: clamp(10px, 1.1vw, 15px); min-height: 0; }
+  .hero-col { display: flex; flex-direction: column; gap: clamp(10px, 1.1vw, 15px); min-height: 0; overflow: hidden; }
 
   .waiting-card {
     border-radius: var(--radius-lg); padding: clamp(16px, 1.6vw, 24px) clamp(18px, 1.8vw, 26px); color: white; box-shadow: var(--shadow-lg);
@@ -150,17 +150,21 @@
   .waiting-card__value { margin: 8px 0 0; font-family: var(--font-display); font-size: clamp(58px, 6.6vw, 108px); font-weight: 800; line-height: 1; position: relative; z-index: 1; }
 
   .mood-card {
-    border-radius: var(--radius-lg); padding: clamp(16px, 1.6vw, 24px); color: white; box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg); padding: clamp(12px, 1.3vw, 20px); color: white; box-shadow: var(--shadow-lg);
     background: linear-gradient(150deg, var(--indigo-600), var(--violet-900));
     display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-    flex: 1 1 auto; min-height: 0; transition: background .4s ease; gap: 4px;
+    flex: 1 1 auto; min-height: 0; transition: background .4s ease; gap: 3px;
+    overflow: hidden; position: relative;
   }
   .mood-card[data-level="warning"] { background: linear-gradient(150deg, #e0a53a, var(--amber)); }
   .mood-card[data-level="critical"] { background: linear-gradient(150deg, #e05f5f, var(--red-crit)); }
   .mood-card[data-level="offline"] { background: linear-gradient(150deg, #8a90a8, #565c74); }
-  .mood-card__icon { width: clamp(46px, 4.4vw, 72px); height: clamp(46px, 4.4vw, 72px); margin-bottom: 4px; opacity: 0.95; }
-  .mood-card__title { margin: 0; font-family: var(--font-display); font-size: clamp(19px, 1.8vw, 27px); font-weight: 800; }
-  .mood-card__message { margin: 4px 0 0; font-size: clamp(14px, 1.15vw, 17px); opacity: .9; max-width: 280px; line-height: 1.45; }
+  .mood-card__icon { width: clamp(32px, 3vw, 52px); height: clamp(32px, 3vw, 52px); margin-bottom: 2px; opacity: 0.95; flex-shrink: 0; }
+  .mood-card__title { margin: 0; font-family: var(--font-display); font-size: clamp(16px, 1.5vw, 23px); font-weight: 800; flex-shrink: 0; }
+  .mood-card__message {
+    margin: 3px 0 0; font-size: clamp(12px, 0.95vw, 15px); opacity: .9; max-width: 280px; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
 
   /* ===================== Stat grid (3x2) ===================== */
   .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: clamp(8px, 0.9vw, 13px); min-height: 0; }
@@ -233,7 +237,15 @@
   .agent-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; flex: 0 0 auto; }
   .agent-section__head h2 { margin: 0; font-size: 18px; font-family: var(--font-display); color: var(--ink); font-weight: 800; }
   .agent-section__hint { margin: 0; font-size: 13px; color: var(--ink-faint); font-weight: 500; }
-  .table-wrap { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+  .table-wrap { overflow-y: auto; flex: 1 1 auto; min-height: 0; max-height: var(--table-max-h, 230px); transition: max-height .25s ease; }
+  .table-wrap.is-expanded { max-height: none; flex: 1 1 auto; }
+  .agent-section__more { flex: 0 0 auto; text-align: center; margin-top: 8px; }
+  .btn-more {
+    border: 1px solid var(--line); background: var(--canvas); color: var(--indigo-700); font-weight: 700;
+    font-size: 13px; padding: 8px 18px; border-radius: 999px; cursor: pointer; font-family: var(--font-body);
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .btn-more:hover { background: var(--canvas-edge); border-color: var(--cyan-500); }
   .agent-table { width: 100%; border-collapse: collapse; font-size: 16px; }
   .agent-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
   .agent-table th { text-align: left; padding: 10px 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--ink-faint); border-bottom: 1px solid var(--line); }
@@ -456,6 +468,9 @@
             <tr><td colspan="4"><div class="empty-state"><span>Carregando…</span></div></td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="agent-section__more">
+        <button id="agentMoreBtn" class="btn-more" type="button" style="display:none"></button>
       </div>
       <p id="agentError" class="error-banner" style="display:none"></p>
     </section>
@@ -882,6 +897,72 @@ function renderTopicsCard(board, settings) {
   });
 }
 
+const AGENT_VISIBLE_LIMIT = 4;
+let agentRowsFull = [];
+let agentExpanded = false;
+
+function renderAgentRows() {
+  const agentTableBody = document.getElementById("agentTableBody");
+  const tableWrap = document.querySelector(".table-wrap");
+  const moreBtn = document.getElementById("agentMoreBtn");
+  const rows = agentRowsFull;
+
+  agentTableBody.innerHTML = "";
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 4;
+    td.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <strong>Nenhum analista acima do tempo limite</strong>
+      <span>Atendimento dentro do esperado no momento.</span>
+    </div>`;
+    tr.appendChild(td);
+    agentTableBody.appendChild(tr);
+    tableWrap.classList.remove("is-expanded");
+    moreBtn.style.display = "none";
+    return;
+  }
+
+  const visible = agentExpanded ? rows : rows.slice(0, AGENT_VISIBLE_LIMIT);
+  visible.forEach((r) => {
+    const tr = document.createElement("tr");
+    const href = r.Cliente__href || r.Analista__href;
+    const analistaTd = document.createElement("td");
+    if (href) {
+      const a = document.createElement("a");
+      a.href = href; a.target = "_blank"; a.textContent = r.Analista || "–";
+      analistaTd.appendChild(a);
+    } else {
+      analistaTd.textContent = r.Analista || "–";
+    }
+    const clienteTd = document.createElement("td"); clienteTd.textContent = r.Cliente || "–";
+    const filaTd = document.createElement("td"); filaTd.textContent = r.Fila || "–";
+    const tempoTd = document.createElement("td"); tempoTd.textContent = r.Tempo || "–"; tempoTd.className = tempoCellClass(r.__level);
+    tr.append(analistaTd, clienteTd, filaTd, tempoTd);
+    agentTableBody.appendChild(tr);
+  });
+
+  if (rows.length > AGENT_VISIBLE_LIMIT) {
+    moreBtn.style.display = "inline-block";
+    if (agentExpanded) {
+      moreBtn.textContent = "Ver menos";
+      tableWrap.classList.add("is-expanded");
+    } else {
+      moreBtn.textContent = `Ver mais (+${rows.length - AGENT_VISIBLE_LIMIT})`;
+      tableWrap.classList.remove("is-expanded");
+    }
+  } else {
+    moreBtn.style.display = "none";
+    tableWrap.classList.remove("is-expanded");
+  }
+}
+
+document.getElementById("agentMoreBtn").addEventListener("click", () => {
+  agentExpanded = !agentExpanded;
+  renderAgentRows();
+});
+
 function tempoCellClass(level) {
   if (level === "critical") return "tempo-critical";
   if (level === "warning") return "tempo-warning";
@@ -949,7 +1030,6 @@ async function refreshPanel() {
     renderTopicsCard(null, settings);
   }
 
-  const agentTableBody = document.getElementById("agentTableBody");
   const agentError = document.getElementById("agentError");
   try {
     const panel = await callSupabaseFunction("painel-proxy", { method: "GET" });
@@ -964,41 +1044,14 @@ async function refreshPanel() {
       .filter((r) => r.__level !== "ok")
       .sort((a, b) => (b.__tempoSegundos || 0) - (a.__tempoSegundos || 0));
 
-    agentTableBody.innerHTML = "";
-    if (rows.length === 0) {
-      const tr = document.createElement("tr");
-      const td = document.createElement("td");
-      td.colSpan = 4;
-      td.innerHTML = `<div class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <strong>Nenhum analista acima do tempo limite</strong>
-        <span>Atendimento dentro do esperado no momento.</span>
-      </div>`;
-      tr.appendChild(td);
-      agentTableBody.appendChild(tr);
-    } else {
-      rows.forEach((r) => {
-        const tr = document.createElement("tr");
-        const href = r.Cliente__href || r.Analista__href;
-        const analistaTd = document.createElement("td");
-        if (href) {
-          const a = document.createElement("a");
-          a.href = href; a.target = "_blank"; a.textContent = r.Analista || "–";
-          analistaTd.appendChild(a);
-        } else {
-          analistaTd.textContent = r.Analista || "–";
-        }
-        const clienteTd = document.createElement("td"); clienteTd.textContent = r.Cliente || "–";
-        const filaTd = document.createElement("td"); filaTd.textContent = r.Fila || "–";
-        const tempoTd = document.createElement("td"); tempoTd.textContent = r.Tempo || "–"; tempoTd.className = tempoCellClass(r.__level);
-        tr.append(analistaTd, clienteTd, filaTd, tempoTd);
-        agentTableBody.appendChild(tr);
-      });
-    }
+    agentRowsFull = rows;
+    renderAgentRows();
   } catch (err) {
     agentError.style.display = "flex";
     agentError.textContent = `Falha ao buscar dados do Painel RC via proxy (${err.message}).`;
-    agentTableBody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><span>Sem dados.</span></div></td></tr>';
+    agentRowsFull = [];
+    renderAgentRows();
+    document.getElementById("agentTableBody").innerHTML = '<tr><td colspan="4"><div class="empty-state"><span>Sem dados.</span></div></td></tr>';
   }
 }
 
